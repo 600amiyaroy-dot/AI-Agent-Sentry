@@ -1,0 +1,142 @@
+# ============================================
+# KUBERNETES DEPLOYMENT
+# Enterprise AI Agent Sentry
+# ============================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-agent-sentry
+  namespace: security
+  labels:
+    app: ai-agent-sentry
+    tier: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ai-agent-sentry
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ai-agent-sentry
+        tier: backend
+    spec:
+      containers:
+      - name: ai-agent-sentry
+        image: ai-agent-sentry:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: ai-sentry-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: ai-sentry-secrets
+              key: redis-url
+        - name: SLACK_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: ai-sentry-secrets
+              key: slack-webhook
+        - name: PAGERDUTY_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ai-sentry-secrets
+              key: pagerduty-key
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: models
+          mountPath: /app/models
+        - name: data
+          mountPath: /app/data
+      volumes:
+      - name: logs
+        persistentVolumeClaim:
+          claimName: ai-sentry-logs-pvc
+      - name: models
+        persistentVolumeClaim:
+          claimName: ai-sentry-models-pvc
+      - name: data
+        persistentVolumeClaim:
+          claimName: ai-sentry-data-pvc
+      nodeSelector:
+        node-type: application
+      tolerations:
+      - key: "security"
+        operator: "Equal"
+        value: "high"
+        effect: "NoSchedule"
+
+---
+# ============================================
+# HORIZONTAL POD AUTOSCALER
+# ============================================
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ai-agent-sentry-hpa
+  namespace: security
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-agent-sentry
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Pods
+    pods:
+      metric:
+        name: requests_per_second
+      target:
+        type: AverageValue
+        averageValue: 1000

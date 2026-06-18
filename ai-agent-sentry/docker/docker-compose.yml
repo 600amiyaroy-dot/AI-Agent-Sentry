@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # 1. DISCOVERY ENGINE (Runs main.py)
+  # ============================================
+  discovery:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ai-sentry-discovery
+    command: python main.py
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+    networks:
+      - ai-sentry-network
+    restart: unless-stopped
+
+  # ============================================
+  # 2. WEB DASHBOARD (Runs web_dashboard.py)
+  # ============================================
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ai-sentry-dashboard
+    command: uvicorn web_dashboard:app --host 0.0.0.0 --port 8000 --workers 2
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+    networks:
+      - ai-sentry-network
+    depends_on:
+      - discovery
+    restart: unless-stopped
+
+  # ============================================
+  # 3. REDIS CACHE (Optional)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: ai-sentry-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai-sentry-network
+    restart: unless-stopped
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  ai-sentry-network:
+    driver: bridge
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  redis_data:

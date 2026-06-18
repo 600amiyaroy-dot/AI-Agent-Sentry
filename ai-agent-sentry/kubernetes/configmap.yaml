@@ -1,0 +1,55 @@
+# ============================================
+# KUBERNETES CONFIGMAP
+# ============================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-sentry-config
+  namespace: security
+data:
+  app-config.yaml: |
+    system:
+      name: "AI Agent Sentry"
+      version: "2.0.0"
+      debug: false
+    
+    discovery:
+      scan_network: true
+      scan_headers: true
+      scan_logs: true
+      scan_apis: true
+      network_scan_range:
+        - "10.0.0.0/8"
+        - "172.16.0.0/12"
+        - "192.168.0.0/16"
+    
+    monitoring:
+      real_time: true
+      alert_threshold: 10
+      log_retention_days: 90
+    
+    detection:
+      ml_enabled: true
+      anomaly_threshold: 0.15
+      training_data_size: 1000
+    
+    response:
+      auto_response: true
+      actions:
+        quarantine: true
+        block_access: true
+        revoke_permissions: true
+        send_alert: true
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-sentry-postgres-init
+  namespace: security
+data:
+  init.sql: |
+    CREATE DATABASE ai_sentry;
+    CREATE USER user WITH PASSWORD 'password';
+    GRANT ALL PRIVILEGES ON DATABASE ai_sentry TO user;
